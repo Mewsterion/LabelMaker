@@ -1,0 +1,254 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EasyPost Local Label App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spinner 1.5s linear infinite;
+            animation: spinner 1.5s linear infinite;
+        }
+
+        @-webkit-keyframes spinner {
+            0% {
+                -webkit-transform: rotate(0deg);
+            }
+
+            100% {
+                -webkit-transform: rotate(360deg);
+            }
+        }
+
+        @keyframes spinner {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">EasyPost Label Creator</h1>
+        <p class="text-gray-500 mb-6">Quickly generate USPS First-Class letter labels.</p>
+
+        <!-- Label Type Toggle -->
+        <div class="flex items-center justify-center mb-6">
+            <div class="bg-gray-200 p-1 rounded-lg flex">
+                <button type="button" id="modeEasyPost"
+                    class="px-4 py-2 rounded-md text-sm font-medium bg-white shadow-sm text-gray-800 transition-all">EasyPost</button>
+                <button type="button" id="modeLocal"
+                    class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-800 transition-all">Local
+                    PDF</button>
+            </div>
+        </div>
+
+        <form id="labelForm" class="space-y-4">
+            <div>
+                <label for="address" class="block text-sm font-medium text-gray-700">Recipient Address</label>
+                <textarea id="address" rows="5"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="Paste the full address here...&#10;John Smith&#10;123 Main St&#10;Anytown, CA 12345"></textarea>
+            </div>
+
+            <div>
+                <label for="weight" class="block text-sm font-medium text-gray-700">Weight (oz)</label>
+                <input type="number" id="weight" value="1.0" step="0.1"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+            </div>
+
+            <button type="submit" id="submitBtn"
+                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <span id="btnText">Create Label</span>
+                <div id="loader"
+                    class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-5 w-5 ml-3 hidden">
+                </div>
+            </button>
+        </form>
+
+        <div id="result" class="mt-8 p-6 bg-gray-50 rounded-lg hidden">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Success!</h2>
+            <div class="space-y-3">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Postage Label (PNG/PDF):</p>
+                    <a id="labelUrl" href="#" target="_blank"
+                        class="text-indigo-600 hover:text-indigo-800 break-all"></a>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Tracking Page:</p>
+                    <a id="trackingUrl" href="#" target="_blank"
+                        class="text-indigo-600 hover:text-indigo-800 break-all"></a>
+                </div>
+            </div>
+        </div>
+
+        <div id="error" class="mt-6 p-4 bg-red-100 rounded-lg hidden">
+            <h3 class="text-lg font-medium text-red-800">Error</h3>
+            <p id="errorMessage" class="mt-2 text-sm text-red-700"></p>
+        </div>
+
+    </div>
+
+    <script>
+        const form = document.getElementById('labelForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const loader = document.getElementById('loader');
+        const resultDiv = document.getElementById('result');
+        const errorDiv = document.getElementById('error');
+
+        // Mode Toggle Logic
+        let currentMode = 'easypost'; // 'easypost' or 'local'
+        const modeEasyPostBtn = document.getElementById('modeEasyPost');
+        const modeLocalBtn = document.getElementById('modeLocal');
+
+        function setMode(mode) {
+            currentMode = mode;
+            if (mode === 'easypost') {
+                modeEasyPostBtn.classList.add('bg-white', 'shadow-sm', 'text-gray-800');
+                modeEasyPostBtn.classList.remove('text-gray-600');
+                modeLocalBtn.classList.remove('bg-white', 'shadow-sm', 'text-gray-800');
+                modeLocalBtn.classList.add('text-gray-600');
+            } else {
+                modeLocalBtn.classList.add('bg-white', 'shadow-sm', 'text-gray-800');
+                modeLocalBtn.classList.remove('text-gray-600');
+                modeEasyPostBtn.classList.remove('bg-white', 'shadow-sm', 'text-gray-800');
+                modeEasyPostBtn.classList.add('text-gray-600');
+            }
+        }
+
+        modeEasyPostBtn.addEventListener('click', () => setMode('easypost'));
+        modeLocalBtn.addEventListener('click', () => setMode('local'));
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Reset UI
+            resultDiv.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+            submitBtn.disabled = true;
+            btnText.textContent = 'Creating...';
+            loader.classList.remove('hidden');
+
+            const addressText = document.getElementById('address').value;
+            const weight = parseFloat(document.getElementById('weight').value);
+
+            const toAddress = parseAddress(addressText);
+
+            if (!toAddress) {
+                showError("Could not parse the address. Please ensure it's formatted correctly.");
+                resetButton();
+                return;
+            }
+
+            const shipmentData = {
+                shipment: {
+                    to_address: toAddress,
+                    // from_address is injected by the backend
+                    parcel: {
+                        predefined_package: "Letter",
+                        weight: weight
+                    },
+                    // Carrier account ID is injected by the backend
+                    service: "First",
+                    carrier: "USPS",
+                    options: {
+                        label_format: "PNG",
+                        label_size: "4x6"
+                    }
+                }
+            };
+
+            try {
+                // Determine endpoint based on mode
+                const endpoint = currentMode === 'easypost' ? '/create_label' : '/create_local_label';
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(shipmentData)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error?.message || 'An unknown error occurred.');
+                }
+
+                displayResults(data);
+
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                resetButton();
+            }
+        });
+
+        function parseAddress(text) {
+            const lines = text.trim().split('\n').map(line => line.trim()).filter(line => line);
+            if (lines.length < 3) return null;
+
+            const address = {};
+            address.name = lines[0];
+            address.street1 = lines[1];
+
+            const lastLine = lines[lines.length - 1];
+            if (lastLine.toUpperCase() === 'US') {
+                address.country = 'US';
+                lines.pop();
+            }
+
+            const cityStateZipLine = lines[lines.length - 1];
+            const parts = cityStateZipLine.split(/,?\s+/);
+
+            if (parts.length < 3) return null;
+
+            address.zip = parts.pop();
+            address.state = parts.pop();
+            address.city = parts.slice(0, parts.length).join(' ');
+
+            if (lines.length > 3) {
+                address.street2 = lines.slice(2, lines.length - 1).join(' ');
+            }
+
+            return address;
+        }
+
+        function displayResults(data) {
+            document.getElementById('labelUrl').href = data.postage_label.label_url;
+            document.getElementById('labelUrl').textContent = data.postage_label.label_url;
+            document.getElementById('trackingUrl').href = data.tracker.public_url;
+            document.getElementById('trackingUrl').textContent = data.tracker.public_url;
+            resultDiv.classList.remove('hidden');
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        function resetButton() {
+            submitBtn.disabled = false;
+            btnText.textContent = 'Create Label';
+            loader.classList.add('hidden');
+        }
+
+    </script>
+</body>
+
+</html>
